@@ -1,0 +1,10 @@
+[package]
+name = "bomber-proto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Wire protocol for the Bomberman bot arena: 2-byte client uplink, binary server frames"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
