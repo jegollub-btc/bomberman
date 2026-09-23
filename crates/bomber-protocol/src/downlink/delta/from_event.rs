@@ -58,7 +58,7 @@ impl From<&Event> for DeltaRecord {
                 fuse,
             },
             Event::BombRemoved { id } => DeltaRecord::BombRemove { id },
-            Event::Exploded { centre, arms } => DeltaRecord::Explosion {
+            Event::Exploded { centre, arms, .. } => DeltaRecord::Explosion {
                 x: centre.x,
                 y: centre.y,
                 // `arms` is indexed like `Direction::ALL`; naming the indices

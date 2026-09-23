@@ -54,6 +54,7 @@ fn detonate(
 ) {
     let arms = blast::arms(&game.board.grid, bomb.cell, bomb.flame);
     events.push(Event::Exploded {
+        bomb: bomb.id,
         centre: bomb.cell,
         arms,
     });

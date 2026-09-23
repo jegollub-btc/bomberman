@@ -1,0 +1,61 @@
+# Bomberman arena server.
+#
+# Every value here is a default -- a missing or partial file is a valid one, so
+# this doubles as documentation of what the defaults are. The [rules] block is
+# shipped verbatim to every bot in MATCH_INIT, so retuning it changes how bots
+# behave without anyone rebuilding one.
+
+[server]
+# Where bots send their two bytes.
+bind = "0.0.0.0:47800"
+# Where the visualizer and moderation UI connect.
+web_bind = "127.0.0.1:8080"
+# How often a full keyframe goes out, in ticks. This is the ceiling on how long
+# a bot can stay desynced after losing a datagram: it has no way to ask for a
+# resend, so the next keyframe is its only recovery.
+keyframe_interval_ticks = 30
+# Consecutive ticks MATCH_INIT is repeated on at match start. With no
+# acknowledgements, repetition is the only delivery guarantee available.
+match_init_repeats = 5
+# Built visualizer, served at /. A placeholder page is shown if it is absent.
+static_dir = "visualizer/dist"
+
+[lobby]
+min_players = 2
+max_players = 4
+# Three seconds at 60 ticks per second.
+countdown_ticks = 180
+# A seat silent for this long shows as stale in the moderation UI.
+stale_after_ticks = 120
+lobby_status_interval_ticks = 30
+
+[rules]
+bomb_fuse_ticks = 120
+flame_duration_ticks = 30
+# Ticks to cross one cell at speed level 0.
+ticks_per_cell = 8
+# Ticks saved per speed level.
+speed_step_ticks = 1
+start_bombs = 1
+start_flame = 1
+max_flame = 6
+max_speed = 3
+# Chance a destroyed crate drops a power-up. The three kinds are equally likely.
+powerup_chance_pct = 30
+round_time_secs = 180
+# When the board starts closing in. Set beyond round_time_secs to disable.
+sudden_death_secs = 120
+
+[map]
+# Forced odd and clamped to 7..63.
+width = 15
+height = 13
+soft_block_density = 0.75
+# none | mirror_x | quad
+#
+# quad mirrors the crate layout across both axes so no player is dealt a more
+# open corner. Without it, match results stop being a comparison of bots.
+symmetry = "quad"
+# 0 rolls a fresh board every match. Any other value pins it, which is what a
+# tournament or a bug report wants.
+seed = 0

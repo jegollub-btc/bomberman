@@ -3,15 +3,18 @@ name = "bomber-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Authoritative 60 Hz Bomberman server: UDP bot traffic, WebSocket visualizer feed"
+description = "Authoritative 60 Hz Bomberman server: UDP bot traffic, WebSocket visualizer and moderation feeds"
 
 [dependencies]
-bomber-protocol = { workspace = true }
+bomber-application = { workspace = true }
 bomber-domain = { workspace = true }
+bomber-protocol = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+futures-util = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 tower-http = { workspace = true }

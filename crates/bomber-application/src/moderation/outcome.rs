@@ -12,7 +12,9 @@ pub enum CommandOutcome {
     /// Accepted, and the adapter must also drop this player's transport
     /// binding so the seat is genuinely free.
     AcceptedAndReleased(PlayerId),
-    Preview(Box<Board>),
+    /// A generated board, plus the seed that produced it -- without the seed a
+    /// preview cannot be pinned for the match it is previewing.
+    Preview { board: Box<Board>, seed: u64 },
     Rejected(String),
 }
 

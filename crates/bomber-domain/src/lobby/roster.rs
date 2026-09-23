@@ -132,9 +132,13 @@ impl Lobby {
     }
 
     fn begin_countdown_error(&self) -> Option<StartError> {
+        // MatchOver counts as 'already running' for this purpose: the results
+        // of the last match are still on screen, and starting straight over
+        // them would discard what a moderator is very likely still reading.
+        // Reset is the deliberate act of dismissing them.
         if matches!(
             self.state,
-            LobbyState::Countdown | LobbyState::Running
+            LobbyState::Countdown | LobbyState::Running | LobbyState::MatchOver
         ) {
             return Some(StartError::AlreadyRunning);
         }
@@ -233,6 +237,26 @@ mod tests {
         assert!(!lobby.tick_countdown());
         assert!(!lobby.tick_countdown());
         assert!(lobby.tick_countdown(), "fires exactly once, at zero");
+    }
+
+    /// Results stay on screen until somebody dismisses them.
+    #[test]
+    fn a_finished_match_must_be_reset_before_another_can_start() {
+        let mut lobby = Lobby::new(4, 2);
+        lobby.admit().unwrap();
+        lobby.admit().unwrap();
+        lobby.begin_countdown(1).unwrap();
+        lobby.begin_match();
+        lobby.finish_match();
+
+        assert!(!lobby.can_start());
+        assert_eq!(
+            lobby.begin_countdown(60),
+            Err(StartError::AlreadyRunning)
+        );
+
+        lobby.reset();
+        assert!(lobby.can_start(), "reset dismisses the results and re-arms Start");
     }
 
     #[test]

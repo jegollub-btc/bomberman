@@ -191,8 +191,9 @@ fn previewing_a_map_changes_nothing() {
     let before = session.state();
 
     match session.execute(ModeratorCommand::PreviewMap) {
-        CommandOutcome::Preview(board) => {
+        CommandOutcome::Preview { board, seed } => {
             assert_eq!(validate(&board), Ok(()), "a preview must be playable too");
+            assert_ne!(seed, 0, "the preview reports the seed it used");
         }
         other => panic!("expected a preview, got {other:?}"),
     }

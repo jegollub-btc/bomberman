@@ -39,7 +39,11 @@ pub enum Event {
     },
     /// The blast *shape*, for animation. The cells that actually kill arrive as
     /// [`Event::FlameKindled`].
+    ///
+    /// Carries the bomb id so a client can tie the animation back to the bomb
+    /// it was watching, rather than having to match on position.
     Exploded {
+        bomb: BombId,
         centre: Cell,
         /// Arm length per direction, indexed like [`Direction::ALL`].
         arms: [u8; 4],

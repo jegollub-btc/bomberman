@@ -393,7 +393,13 @@ impl ArenaSession {
                 self.config.map.apply(patch);
                 CommandOutcome::Accepted
             }
-            ModeratorCommand::PreviewMap => CommandOutcome::Preview(Box::new(self.preview())),
+            ModeratorCommand::PreviewMap => {
+                let (board, seed) = self.preview();
+                CommandOutcome::Preview {
+                    board: Box::new(board),
+                    seed,
+                }
+            }
         }
     }
 
@@ -466,13 +472,13 @@ impl ArenaSession {
     }
 
     /// Generate a board with the current settings without starting anything.
-    fn preview(&mut self) -> Board {
+    fn preview(&mut self) -> (Board, u64) {
         let seed = match self.config.map.seed {
             0 => self.seeds.gen(),
             pinned => pinned,
         };
         let players = self.lobby.occupied_count().max(self.config.min_players);
-        generate(&self.config.map.generation, seed, players)
+        (generate(&self.config.map.generation, seed, players), seed)
     }
 
     /// The settings the next match will use.
