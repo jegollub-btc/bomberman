@@ -32,7 +32,9 @@
         };
 
         shellHook = ''
-          echo "bomberman dev shell -- run 'just' to list tasks"
+          # To stderr: this greeting must not end up inside a $(nix develop
+          # --command ...) capture, which is a normal thing to do.
+          echo "bomberman dev shell -- run 'just' to list tasks" >&2
         '';
       };
     };

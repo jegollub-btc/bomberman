@@ -322,7 +322,7 @@ Tiles: `0` empty (walkable) · `1` solid wall (indestructible) · `2` soft block
 
 A 15×13 board is 49 bytes; a 31×31 board is 241.
 
-### 5.8 The rules block (17 bytes)
+### 5.8 The rules block (19 bytes)
 
 Read these rather than hardcoding them — the moderator can retune the server
 between matches and your bot will follow along.

@@ -66,10 +66,14 @@ impl MatchInit {
     }
 }
 
-/// The rules block. 17 bytes, and bots are expected to read it rather than
-/// hardcode the defaults -- that is what lets a moderator retune the server
-/// without anyone rebuilding a bot.
-pub const RULES_ENCODED_LEN: usize = 17;
+/// The rules block, in bytes: `u16 u16 u8 u8 u8 u8 u8 u8 u8 u32 u32`.
+///
+/// Bots are expected to read the block rather than hardcode the defaults --
+/// that is what lets a moderator retune the server without anyone rebuilding a
+/// bot. A test asserts this matches what [`encode_rules`] actually writes,
+/// because a wrong number here is a wrong number in `BOT_GUIDE.md`, and a bot
+/// author who trusts it mis-parses everything after the block.
+pub const RULES_ENCODED_LEN: usize = 2 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 4;
 
 pub fn encode_rules(rules: &Rules, w: &mut Writer) {
     w.u16(rules.bomb_fuse_ticks)

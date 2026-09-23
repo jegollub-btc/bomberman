@@ -269,3 +269,44 @@ fn the_packed_grid_is_two_bits_per_cell() {
         Ok(grid)
     );
 }
+
+
+/// The documented size of the rules block has to be the size it actually is:
+/// a bot that trusts a wrong number mis-parses every byte after it.
+#[test]
+fn the_rules_block_is_the_length_it_claims() {
+    let mut writer = Writer::new();
+    bomber_protocol::downlink::encode_rules(&Rules::default(), &mut writer);
+    assert_eq!(writer.finish().len(), RULES_ENCODED_LEN);
+}
+
+/// MATCH_INIT is the one frame whose field offsets bot authors hand-code, so
+/// the ones printed in BOT_GUIDE.md are pinned here.
+#[test]
+fn match_init_field_offsets_match_the_guide() {
+    let frame = all_frames()
+        .into_iter()
+        .find(|f| f.frame_type() == frame_type::MATCH_INIT)
+        .unwrap();
+    let bytes = frame.encode();
+
+    assert_eq!(bytes[0], frame_type::MATCH_INIT, "offset 0: frame type");
+    assert_eq!(&bytes[1..5], &0u32.to_le_bytes(), "offset 1: tick");
+    assert_eq!(bytes[5], PROTOCOL_VERSION, "offset 5: protocol version");
+    assert_eq!(&bytes[6..10], &0xDEAD_BEEFu32.to_le_bytes(), "offset 6: match id");
+    assert_eq!(
+        &bytes[10..18],
+        &0x0123_4567_89AB_CDEFu64.to_le_bytes(),
+        "offset 10: seed"
+    );
+    assert_eq!(bytes[18], 2, "offset 18: your player id");
+    assert_eq!(bytes[19], 4, "offset 19: player count");
+    assert_eq!(bytes[20], 15, "offset 20: width");
+    assert_eq!(bytes[21], 13, "offset 21: height");
+
+    // Grid, then spawns, then the rules block -- and nothing after it.
+    let grid_len = bomber_protocol::grid::packed_len(15, 13);
+    let spawns_at = 22 + grid_len;
+    assert_eq!(&bytes[spawns_at..spawns_at + 2], &[1, 1], "first spawn");
+    assert_eq!(bytes.len(), spawns_at + 4 * 2 + RULES_ENCODED_LEN);
+}
