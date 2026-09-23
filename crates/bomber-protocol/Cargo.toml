@@ -1,0 +1,11 @@
+[package]
+name = "bomber-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Wire protocol adapter: the 2-byte bot uplink and the binary server downlink"
+
+[dependencies]
+bomber-domain = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

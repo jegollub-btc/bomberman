@@ -1,0 +1,11 @@
+[package]
+name = "bomber-bot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Rust bot SDK for the Bomberman arena: handshake, sequencing, delta reconstruction"
+
+[dependencies]
+bomber-protocol = { workspace = true }
+anyhow = { workspace = true }
+rand = { workspace = true }

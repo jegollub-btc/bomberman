@@ -1,0 +1,11 @@
+[package]
+name = "bomber-domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bomberman domain model: board, match and lobby. Pure, deterministic, no I/O"
+
+[dependencies]
+rand = { workspace = true }
+rand_pcg = { workspace = true }
+serde = { workspace = true }

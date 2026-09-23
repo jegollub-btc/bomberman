@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/bomber-proto",
-    "crates/bomber-sim",
+    "crates/bomber-domain",
+    "crates/bomber-protocol",
     "crates/bomber-server",
     "crates/bomber-bot",
 ]
@@ -13,8 +13,8 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
-bomber-proto = { path = "crates/bomber-proto" }
-bomber-sim = { path = "crates/bomber-sim" }
+bomber-domain = { path = "crates/bomber-domain" }
+bomber-protocol = { path = "crates/bomber-protocol" }
 
 anyhow = "1"
 axum = { version = "0.7", features = ["ws"] }

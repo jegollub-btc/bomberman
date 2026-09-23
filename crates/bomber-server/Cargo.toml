@@ -1,0 +1,19 @@
+[package]
+name = "bomber-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Authoritative 60 Hz Bomberman server: UDP bot traffic, WebSocket visualizer feed"
+
+[dependencies]
+bomber-protocol = { workspace = true }
+bomber-domain = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
