@@ -77,6 +77,42 @@ Send the two bytes `0xFF 0xFF` to the server's UDP port.
 The server replies with an `ASSIGNED` frame containing your **player id**
 (`0`–`3`).
 
+### Naming yourself
+
+The hello packet may carry a name, so you show up as something other than
+`bot-2` in the moderation UI and the results table:
+
+```text
+byte 0:      0xFF
+byte 1:      0xFF
+byte 2:      name length in bytes            (optional)
+bytes 3..:   the name, UTF-8                 (optional)
+```
+
+```python
+def hello(name=None):
+    if not name:
+        return bytes([0xFF, 0xFF])            # still perfectly valid
+    encoded = name.encode()[:24]
+    return bytes([0xFF, 0xFF, len(encoded)]) + encoded
+```
+
+This is the one packet that is allowed to be longer than two bytes. The
+two-byte rule governs the **action** packet, which you send 60 times a second
+and where the bytes actually matter; a join happens once.
+
+Rules worth knowing before you pick something clever:
+
+- **24 bytes maximum**, UTF-8. Longer names are truncated, not refused — and
+  truncation respects character boundaries, so multi-byte characters survive
+  intact or not at all.
+- Control characters are stripped and surrounding whitespace trimmed. If
+  nothing usable is left you get `bot-<id>`.
+- **A moderator can rename your seat, and that wins.** Saying hello again will
+  not put your name back: the override exists so a human can tell two bots
+  apart, and a reconnect undoing it would defeat the point.
+- The name belongs to the seat, not to you. Get kicked and it reverts.
+
 > **Your id is bound to the source address of that packet.** Send everything
 > from the same socket, from the same port. Packets whose `player_id` does not
 > match the address they came from are dropped without a reply — this is what
@@ -549,6 +585,7 @@ pick up the new constants from `MATCH_INIT` with no rebuild.
 | Symptom | Almost certainly |
 |---------|------------------|
 | Never receive `ASSIGNED` | Lobby is full or locked, or you are sending to the wrong port. Retry hello every 500 ms. |
+| Your name does not show up | The length byte disagrees with the bytes that follow, or the name is not valid UTF-8 — either way you are seated anonymously. A moderator rename also beats it. |
 | `ASSIGNED` arrives, then nothing | You are reading with a different socket than you sent hello from. Identity is bound to the source address. |
 | Actions are ignored | Byte 0 is not your assigned id, or you used a reserved action code (`10`–`14`). Both are dropped silently. |
 | Moderation UI shows your bot as stale while it is thinking | You are sending nothing at all. Send `IDLE` (`0`) a couple of times a second so the UI can see you are alive. |

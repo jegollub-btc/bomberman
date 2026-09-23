@@ -152,11 +152,13 @@ impl ArenaSession {
 
     // -- admission -----------------------------------------------------------
 
-    /// Seat a new bot. The caller binds the returned id to whatever transport
-    /// the hello arrived on, and is responsible for rejecting later packets
-    /// that claim the id from anywhere else.
-    pub fn admit(&mut self) -> Result<PlayerId, AdmissionError> {
-        let player = self.lobby.admit()?;
+    /// Seat a new bot, optionally under the name it proposed when joining.
+    ///
+    /// The caller binds the returned id to whatever transport the hello arrived
+    /// on, and is responsible for rejecting later packets that claim the id
+    /// from anywhere else.
+    pub fn admit(&mut self, proposed_name: Option<&str>) -> Result<PlayerId, AdmissionError> {
+        let player = self.lobby.admit(proposed_name)?;
         self.inputs.reset_seat(player);
         self.presence.reset_seat(player);
         self.lobby_dirty = true;
@@ -381,7 +383,7 @@ impl ArenaSession {
                 if !self.lobby.seats().iter().any(|s| s.id == player) {
                     return CommandOutcome::rejected(format!("no seat {player}"));
                 }
-                self.lobby.rename(player, name);
+                self.lobby.rename(player, &name);
                 CommandOutcome::Accepted
             }
             ModeratorCommand::ConfigureMap(patch) => {

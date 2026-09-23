@@ -21,7 +21,7 @@ pub fn session(players: u8) -> ArenaSession {
     };
     let mut session = ArenaSession::new(config, 0xC0FFEE);
     for _ in 0..players {
-        session.admit().expect("seat available");
+        session.admit(None).expect("seat available");
     }
     session
 }

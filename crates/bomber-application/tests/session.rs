@@ -11,8 +11,8 @@ use common::*;
 #[test]
 fn seats_are_handed_out_in_order_and_the_assigned_frame_agrees() {
     let mut session = session(0);
-    let first = session.admit().unwrap();
-    let second = session.admit().unwrap();
+    let first = session.admit(None).unwrap();
+    let second = session.admit(None).unwrap();
     assert_eq!((first.raw(), second.raw()), (0, 1));
 
     match session.assigned_frame(second) {
@@ -27,7 +27,7 @@ fn seats_are_handed_out_in_order_and_the_assigned_frame_agrees() {
 #[test]
 fn a_full_lobby_refuses_further_bots() {
     let mut session = session(4);
-    assert_eq!(session.admit(), Err(AdmissionError::Full));
+    assert_eq!(session.admit(None), Err(AdmissionError::Full));
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn kicking_a_middle_seat_does_not_renumber_the_survivors() {
 fn a_freed_seat_is_offered_to_the_next_bot() {
     let mut session = session(3);
     session.execute(ModeratorCommand::Kick(player(1)));
-    assert_eq!(session.admit(), Ok(player(1)));
+    assert_eq!(session.admit(None), Ok(player(1)));
 }
 
 #[test]
@@ -281,4 +281,67 @@ fn dropped_packets_show_up_as_loss() {
     }
     let loss = session.snapshot().seats[0].presence.loss_pct;
     assert!(loss > 40.0 && loss < 60.0, "expected about 50%, got {loss}");
+}
+
+
+// ---------------------------------------------------------------------------
+// Names
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_bot_may_name_itself_when_it_joins() {
+    let mut session = session(0);
+    let id = session.admit(Some("team-rocket")).unwrap();
+    let snapshot = session.snapshot();
+    assert_eq!(snapshot.seats[id.index()].name, "team-rocket");
+}
+
+#[test]
+fn a_bot_that_sends_no_name_gets_the_default() {
+    let mut session = session(0);
+    session.admit(None).unwrap();
+    assert_eq!(session.snapshot().seats[0].name, "bot-0");
+}
+
+/// A moderator renames seats to tell two bots apart. A bot must not be able to
+/// undo that by reconnecting.
+#[test]
+fn a_moderator_rename_beats_the_name_a_bot_chose() {
+    let mut session = session(0);
+    let id = session.admit(Some("self-chosen")).unwrap();
+    session.execute(ModeratorCommand::Rename {
+        player: id,
+        name: "moderator-chosen".into(),
+    });
+    assert_eq!(session.snapshot().seats[0].name, "moderator-chosen");
+}
+
+#[test]
+fn a_hostile_name_is_cleaned_up_rather_than_refused() {
+    let mut session = session(0);
+    session.admit(Some(&"\u{7}nasty\nname".repeat(40))).unwrap();
+    let name = &session.snapshot().seats[0].name;
+    assert!(name.chars().count() <= 24, "bounded: {name:?}");
+    assert!(!name.chars().any(char::is_control), "printable: {name:?}");
+}
+
+#[test]
+fn the_name_goes_with_the_seat_when_it_is_freed() {
+    let mut session = session(0);
+    let id = session.admit(Some("transient")).unwrap();
+    session.execute(ModeratorCommand::Kick(id));
+    assert_eq!(session.snapshot().seats[0].name, "bot-0");
+}
+
+#[test]
+fn match_players_carry_the_names_they_joined_under() {
+    let mut session = session(0);
+    session.admit(Some("alpha")).unwrap();
+    session.admit(Some("beta")).unwrap();
+    session.execute(ModeratorCommand::Start);
+    session.tick();
+
+    let snapshot = session.snapshot();
+    let names: Vec<&str> = snapshot.seats.iter().take(2).map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["alpha", "beta"]);
 }

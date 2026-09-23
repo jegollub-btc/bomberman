@@ -25,7 +25,7 @@ pub use downlink::{
     LobbyStatus, MatchEnd, MatchInit, PlayerResultRecord, PlayerSnapshot, PowerupSnapshot,
     ServerFrame, RULES_ENCODED_LEN,
 };
-pub use uplink::{seq_is_newer, Action, ClientPacket, HELLO_PACKET, HELLO_PLAYER_ID};
+pub use uplink::{seq_is_newer, Action, ClientPacket, Hello, HELLO_PACKET, HELLO_PLAYER_ID};
 
 /// Bumped whenever a layout changes incompatibly. Sent in `ASSIGNED` and
 /// `MATCH_INIT` so a stale bot fails loudly instead of misreading bytes.

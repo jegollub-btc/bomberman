@@ -85,8 +85,10 @@ Measuring RTT needs an echo, and a two-byte uplink has no room for a token to
 echo back. Staleness is measurable, and it is what actually answers "is it safe
 to press Start". `stale` is the server applying its own threshold to it.
 
-Seats always carry a `name`, even when empty — bots cannot send one, so it is a
-moderator-set label defaulting to `bot-<id>`. Only `addr` goes `null`.
+Seats always carry a `name`, even when empty. A bot may propose one in its join
+packet; a moderator's `rename` overrides it; a seat with neither falls back to
+`bot-<id>`. Names arrive sanitised — control characters stripped, capped at 24
+characters — so they are safe to render as-is. Only `addr` goes `null`.
 
 This message is pushed on connect, whenever the roster or state changes, **and
 twice a second regardless**: `packets_per_sec` and `stale_ms` are measurements
@@ -279,9 +281,9 @@ its own if you only need the controls.
 
 Notes that will save you time:
 
-- **Bots cannot send their own names.** Their uplink is two bytes wide — there
-  is no room for a name, ever. Names come from `rename` and are purely a UI
-  convenience. Default is `bot-<id>`.
+- **A bot may name itself** when it joins, and `rename` overrides that. The
+  override sticks: a bot reconnecting cannot undo it. A bot that sends no name
+  gets `bot-<id>`.
 - `width`/`height` are forced odd and clamped to 7…63 by the server. Echo back
   what the server reports, not what the user typed.
 - `symmetry` is `"none" | "mirror_x" | "quad"`. Default `quad`, and it is worth

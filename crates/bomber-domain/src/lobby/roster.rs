@@ -70,8 +70,12 @@ impl Lobby {
         self.countdown_ticks
     }
 
-    /// Seat the next free slot.
-    pub fn admit(&mut self) -> Result<PlayerId, AdmissionError> {
+    /// Seat the next free slot, optionally under a name the joiner proposed.
+    ///
+    /// The name is applied at admission only. A moderator renaming a seat
+    /// afterwards wins and keeps winning: a bot that reconnects should not be
+    /// able to undo a label put there to tell two of them apart.
+    pub fn admit(&mut self, proposed_name: Option<&str>) -> Result<PlayerId, AdmissionError> {
         if !self.state.admits_new_players() {
             return Err(AdmissionError::NotAcceptingPlayers);
         }
@@ -81,6 +85,9 @@ impl Lobby {
             .find(|s| !s.occupied)
             .ok_or(AdmissionError::Full)?;
         seat.occupied = true;
+        if let Some(name) = proposed_name {
+            seat.set_name(name);
+        }
         Ok(seat.id)
     }
 
@@ -90,9 +97,9 @@ impl Lobby {
         }
     }
 
-    pub fn rename(&mut self, id: PlayerId, name: impl Into<String>) {
+    pub fn rename(&mut self, id: PlayerId, name: &str) {
         if let Some(seat) = self.seats.iter_mut().find(|s| s.id == id) {
-            seat.name = name.into();
+            seat.set_name(name);
         }
     }
 
@@ -191,27 +198,28 @@ mod tests {
     #[test]
     fn seats_are_handed_out_in_order_and_reused_after_a_kick() {
         let mut lobby = Lobby::new(4, 2);
-        assert_eq!(lobby.admit(), Ok(PlayerId::new(0)));
-        assert_eq!(lobby.admit(), Ok(PlayerId::new(1)));
+        assert_eq!(lobby.admit(None), Ok(PlayerId::new(0)));
+        assert_eq!(lobby.admit(Some("team-rocket")), Ok(PlayerId::new(1)));
+        assert_eq!(lobby.seats()[1].name, "team-rocket", "a joiner may name itself");
         lobby.release(PlayerId::new(0));
-        assert_eq!(lobby.admit(), Ok(PlayerId::new(0)), "freed seat is reused");
+        assert_eq!(lobby.admit(None), Ok(PlayerId::new(0)), "freed seat is reused");
     }
 
     #[test]
     fn a_full_lobby_refuses_admission() {
         let mut lobby = Lobby::new(2, 2);
-        assert!(lobby.admit().is_ok());
-        assert!(lobby.admit().is_ok());
-        assert_eq!(lobby.admit(), Err(AdmissionError::Full));
+        assert!(lobby.admit(None).is_ok());
+        assert!(lobby.admit(None).is_ok());
+        assert_eq!(lobby.admit(None), Err(AdmissionError::Full));
     }
 
     #[test]
     fn a_locked_lobby_refuses_admission() {
         let mut lobby = Lobby::new(4, 2);
         lobby.lock();
-        assert_eq!(lobby.admit(), Err(AdmissionError::NotAcceptingPlayers));
+        assert_eq!(lobby.admit(None), Err(AdmissionError::NotAcceptingPlayers));
         lobby.unlock();
-        assert!(lobby.admit().is_ok());
+        assert!(lobby.admit(None).is_ok());
     }
 
     #[test]
@@ -222,8 +230,8 @@ mod tests {
             lobby.begin_countdown(60),
             Err(StartError::NotEnoughPlayers { have: 0, need: 2 })
         );
-        lobby.admit().unwrap();
-        lobby.admit().unwrap();
+        lobby.admit(None).unwrap();
+        lobby.admit(None).unwrap();
         assert!(lobby.can_start());
         assert!(lobby.begin_countdown(60).is_ok());
         assert_eq!(lobby.state(), LobbyState::Countdown);
@@ -232,7 +240,7 @@ mod tests {
     #[test]
     fn the_countdown_reports_the_tick_it_expires_on() {
         let mut lobby = Lobby::new(4, 1);
-        lobby.admit().unwrap();
+        lobby.admit(None).unwrap();
         lobby.begin_countdown(3).unwrap();
         assert!(!lobby.tick_countdown());
         assert!(!lobby.tick_countdown());
@@ -243,8 +251,8 @@ mod tests {
     #[test]
     fn a_finished_match_must_be_reset_before_another_can_start() {
         let mut lobby = Lobby::new(4, 2);
-        lobby.admit().unwrap();
-        lobby.admit().unwrap();
+        lobby.admit(None).unwrap();
+        lobby.admit(None).unwrap();
         lobby.begin_countdown(1).unwrap();
         lobby.begin_match();
         lobby.finish_match();
@@ -262,10 +270,45 @@ mod tests {
     #[test]
     fn occupancy_mask_tracks_seats() {
         let mut lobby = Lobby::new(4, 1);
-        lobby.admit().unwrap();
-        lobby.admit().unwrap();
+        lobby.admit(None).unwrap();
+        lobby.admit(None).unwrap();
         assert_eq!(lobby.occupancy_mask(), 0b0011);
         lobby.release(PlayerId::new(0));
         assert_eq!(lobby.occupancy_mask(), 0b0010);
+    }
+}
+
+
+#[cfg(test)]
+mod naming {
+    use super::*;
+
+    #[test]
+    fn a_seat_without_a_proposed_name_keeps_the_default() {
+        let mut lobby = Lobby::new(4, 2);
+        lobby.admit(None).unwrap();
+        assert_eq!(lobby.seats()[0].name, "bot-0");
+    }
+
+    /// A moderator renames a seat to tell two bots apart. A bot reconnecting
+    /// must not be able to quietly undo that.
+    #[test]
+    fn a_moderator_rename_outlives_a_rejoin() {
+        let mut lobby = Lobby::new(4, 2);
+        let id = lobby.admit(Some("self-chosen")).unwrap();
+        lobby.rename(id, "moderator-chosen");
+        assert_eq!(lobby.seats()[0].name, "moderator-chosen");
+
+        // Same seat, still occupied: a re-hello does not re-admit.
+        assert!(lobby.is_occupied(id));
+        assert_eq!(lobby.seats()[0].name, "moderator-chosen");
+    }
+
+    #[test]
+    fn a_freed_seat_forgets_the_name_it_was_given() {
+        let mut lobby = Lobby::new(4, 2);
+        let id = lobby.admit(Some("transient")).unwrap();
+        lobby.release(id);
+        assert_eq!(lobby.seats()[0].name, "bot-0");
     }
 }

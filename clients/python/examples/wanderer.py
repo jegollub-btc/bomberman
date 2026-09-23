@@ -7,17 +7,19 @@ that is the entire loss-recovery story. The strategy is deliberately plain --
 do not stand in fire, break crates, go find more crates -- so the networking
 stays the part worth reading.
 
-    python3 clients/python/examples/wanderer.py [host] [port]
+    python3 clients/python/examples/wanderer.py [name] [host] [port]
 """
 
+import os
 import random
 import socket
 import struct
 import sys
 import time
 
-HOST = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
-PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 47800
+NAME = sys.argv[1] if len(sys.argv) > 1 else f"wanderer-{os.getpid() % 1000}"
+HOST = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
+PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 47800
 SERVER = (HOST, PORT)
 
 # Frame types.
@@ -334,20 +336,42 @@ def decide(world):
     return random.choice(options) if options else None
 
 
+def hello_packet(name):
+    """`[0xFF, 0xFF]`, optionally followed by a length-prefixed UTF-8 name.
+
+    The two-byte rule governs the per-tick action packet, which goes out 60
+    times a second and is where the bytes actually matter. A join happens once,
+    so it can afford to carry a name -- and a bare two-byte hello is still
+    valid if you would rather not send one.
+    """
+    encoded = name.encode()[:24] if name else b""
+    # Never leave half a character behind.
+    while encoded:
+        try:
+            encoded.decode()
+            break
+        except UnicodeDecodeError:
+            encoded = encoded[:-1]
+    if not encoded:
+        return bytes([0xFF, 0xFF])
+    return bytes([0xFF, 0xFF, len(encoded)]) + encoded
+
+
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto(bytes([0xFF, 0xFF]), SERVER)
+    hello = hello_packet(NAME)
+    sock.sendto(hello, SERVER)
     sock.settimeout(1.0)
 
     world = World()
     seq = 0
-    print(f"saying hello to {HOST}:{PORT}")
+    print(f"saying hello to {HOST}:{PORT} as {NAME!r}")
 
     while world.me is None:
         try:
             data, _ = sock.recvfrom(4096)
         except socket.timeout:
-            sock.sendto(bytes([0xFF, 0xFF]), SERVER)   # lobby full, or packet lost
+            sock.sendto(hello, SERVER)   # lobby full, or packet lost
             continue
         if data[0] == ASSIGNED:
             world.me = data[6]

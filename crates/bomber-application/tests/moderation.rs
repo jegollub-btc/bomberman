@@ -94,10 +94,10 @@ fn seats_survive_a_reset_so_bots_need_not_say_hello_again() {
 fn locking_the_lobby_turns_away_new_bots() {
     let mut session = session(1);
     assert!(session.execute(ModeratorCommand::Lock).is_accepted());
-    assert_eq!(session.admit(), Err(AdmissionError::NotAcceptingPlayers));
+    assert_eq!(session.admit(None), Err(AdmissionError::NotAcceptingPlayers));
 
     assert!(session.execute(ModeratorCommand::Unlock).is_accepted());
-    assert!(session.admit().is_ok());
+    assert!(session.admit(None).is_ok());
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn can_start_tracks_the_rule_the_server_actually_enforces() {
     let mut session = session(1);
     assert!(!session.snapshot().can_start);
 
-    session.admit().unwrap();
+    session.admit(None).unwrap();
     assert!(session.snapshot().can_start);
 
     session.execute(ModeratorCommand::Pause);

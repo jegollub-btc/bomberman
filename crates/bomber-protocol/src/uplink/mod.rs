@@ -15,9 +15,11 @@
 //! datagrams and measure per-bot loss; a bare action byte could do neither.
 
 mod action;
+mod hello;
 mod packet;
 mod sequence;
 
 pub use action::Action;
+pub use hello::Hello;
 pub use packet::{ClientPacket, HELLO_PACKET, HELLO_PLAYER_ID};
 pub use sequence::{seq_is_newer, SEQ_MASK, SEQ_SPACE};

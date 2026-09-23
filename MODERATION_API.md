@@ -127,8 +127,11 @@ kickButton.onclick   = () => send("kick", { id: 2 });
 
 ## Notes
 
-- **Bots cannot send names.** Their uplink is two bytes wide, with no room for
-  one. Names exist only here, via `rename`, and default to `bot-<id>`.
+- **A bot may name itself** in its join packet. `rename` overrides that and
+  keeps overriding it: a bot reconnecting cannot undo a label you put there to
+  tell two of them apart. A bot that sends no name gets `bot-<id>`.
+- Names are sanitised server-side — control characters stripped, capped at 24
+  characters — so they are safe to render as-is.
 - **Nothing starts on its own.** The server never auto-starts a full lobby;
   "looks full, go" is exactly how a tournament round begins without one of the
   competitors.

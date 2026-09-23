@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bomber_domain::shared::PlayerId;
-use bomber_protocol::{ClientPacket, ServerFrame, MAX_DATAGRAM};
+use bomber_protocol::{ClientPacket, Hello, ServerFrame, MAX_DATAGRAM};
 use tokio::net::UdpSocket;
 
 use crate::runtime::Shared;
@@ -66,24 +66,39 @@ pub async fn listen(endpoint: Endpoint, shared: Shared) {
         };
 
         if packet.is_hello() {
-            handle_hello(&endpoint, &shared, addr).await;
+            // A hello may carry a name. An unusable one costs the bot its name,
+            // not its seat -- and it is logged, because the bot has no channel
+            // to be told on.
+            let name = match Hello::decode(&buf[..len]) {
+                Ok(hello) => hello.name,
+                Err(error) => {
+                    tracing::debug!(%addr, %error, "hello carried an unreadable name");
+                    None
+                }
+            };
+            handle_hello(&endpoint, &shared, addr, name).await;
         } else {
             handle_action(&shared, addr, packet);
         }
     }
 }
 
-async fn handle_hello(endpoint: &Endpoint, shared: &Shared, addr: SocketAddr) {
+async fn handle_hello(
+    endpoint: &Endpoint,
+    shared: &Shared,
+    addr: SocketAddr,
+    proposed_name: Option<String>,
+) {
     let existing = shared.registry.lock().unwrap().player_of(&addr);
 
     let (player, frames) = {
         let mut session = shared.session.lock().unwrap();
         let player = match existing {
             Some(player) => player,
-            None => match session.admit() {
+            None => match session.admit(proposed_name.as_deref()) {
                 Ok(player) => {
                     shared.registry.lock().unwrap().bind(addr, player);
-                    tracing::info!(%addr, %player, "seated");
+                    tracing::info!(%addr, %player, name = ?proposed_name, "seated");
                     player
                 }
                 Err(reason) => {
