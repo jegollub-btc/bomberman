@@ -51,23 +51,20 @@ Sent on connect and whenever anything about the roster or state changes.
 {
   "type": "lobby",
   "state": "open",
+  "paused": false,
+  "can_start": true,
+  "min_players": 2,
   "max_players": 4,
   "countdown_ticks": 0,
-  "can_start": true,
-  "map": { "width": 15, "height": 13, "density": 0.75, "symmetry": "quad", "seed": 0 },
+  "tick_rate": 60,
+  "map": { "width": 15, "height": 13, "density": 0.75, "symmetry": "quad", "seed": "0" },
   "slots": [
-    {
-      "id": 0,
-      "name": "bot-0",
-      "addr": "10.12.3.44:51234",
-      "connected": true,
-      "rtt_ms": 3,
-      "packets_per_sec": 60,
-      "loss_pct": 0.4,
-      "last_seen_tick": 1233
-    },
-    { "id": 1, "name": null, "addr": null, "connected": false,
-      "rtt_ms": null, "packets_per_sec": 0, "loss_pct": 0, "last_seen_tick": null }
+    { "id": 0, "name": "bot-0", "connected": true, "addr": "10.12.3.44:51234",
+      "packets_per_sec": 60, "loss_pct": 0.4, "last_seen_tick": 1233,
+      "stale_ms": 16, "stale": false },
+    { "id": 1, "name": "bot-1", "connected": false, "addr": null,
+      "packets_per_sec": 0, "loss_pct": 0, "last_seen_tick": null,
+      "stale_ms": null, "stale": false }
   ]
 }
 ```
@@ -78,6 +75,23 @@ fixed grid of seats rather than a growing list.
 
 `can_start` is the server's own answer to "would a Start command succeed right
 now" — use it to enable/disable the button instead of re-deriving the rule.
+
+Note that `can_start` is `false` in `match_over`: a finished match must be
+`reset` before another can start, so results are never discarded by a stray
+click.
+
+`stale_ms` is **time since that seat last sent anything**, not round-trip time.
+Measuring RTT needs an echo, and a two-byte uplink has no room for a token to
+echo back. Staleness is measurable, and it is what actually answers "is it safe
+to press Start". `stale` is the server applying its own threshold to it.
+
+Seats always carry a `name`, even when empty — bots cannot send one, so it is a
+moderator-set label defaulting to `bot-<id>`. Only `addr` goes `null`.
+
+This message is pushed on connect, whenever the roster or state changes, **and
+twice a second regardless**: `packets_per_sec` and `stale_ms` are measurements
+rather than events, and a health readout that only updates on change freezes
+exactly when a bot goes quiet.
 
 ### 2.2 `match_init`
 
@@ -234,12 +248,14 @@ Every command gets exactly one reply:
 
 ### 2.8 `map_preview` (admin only)
 
-Reply to `preview_map`. Same shape as the board part of `match_init`, so you
-can render it with the same code:
+Reply to `preview_map`. **Exactly the same shape as `match_init`**, so you can
+render it with the same code. `match_id` is `0` and `players` is empty, since
+nothing has started:
 
 ```json
-{ "type": "map_preview", "width": 15, "height": 13,
-  "tiles": [], "spawns": [[1,1]], "seed": "123456789" }
+{ "type": "map_preview", "match_id": 0, "seed": "4242", "tick_rate": 60,
+  "width": 21, "height": 17, "tiles": [ /* width*height */ ],
+  "spawns": [[1,1],[19,1]], "players": [], "rules": { /* ... */ } }
 ```
 
 ---
@@ -414,9 +430,10 @@ or hitching connection it also degrades gracefully instead of freezing.
 ### Lobby
 
 - Four seats, always visible, filled or empty.
-- Per seat: name (editable — sends `rename`), source address, RTT, packets/s,
-  loss %, and a clear connected/stale indicator. A bot that stops sending
-  should look obviously dead before someone presses Start.
+- Per seat: name (editable — sends `rename`), source address, packets/s,
+  loss %, and time since the last packet (`stale_ms`). A bot that stops sending
+  should look obviously dead before someone presses Start; the server already
+  decides that for you with the `stale` flag.
 - Map controls: width, height, density, symmetry, seed, with a **preview board**
   rendered from `preview_map`.
 - Buttons: Start (disabled unless `can_start`), Lock/Unlock, Kick per seat.
@@ -442,11 +459,16 @@ or hitching connection it also degrades gracefully instead of freezing.
 
 ```sh
 just server     # arena on udp/47800, web on :8080
-just pybot      # an example bot, run it twice to fill the lobby
 ```
+
+To put something in the lobby, copy the 20-line Python bot from the top of
+`BOT_GUIDE.md` and run two copies of it. They will appear as seats, and the
+`start` command will then be accepted.
 
 The server serves the built front end from `visualizer/dist` if it exists, so a
 production build is reachable at `http://127.0.0.1:8080` with no extra process.
+Until that directory exists you get a placeholder page listing the endpoints --
+that page is how you tell the server is up, not a sign anything is broken.
 
 For development, run your dev server separately and proxy the sockets. With
 Vite:

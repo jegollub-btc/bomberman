@@ -165,8 +165,8 @@ Every server → client frame starts with the same 5-byte header:
 | `0x00` | `ASSIGNED` | reply to your hello |
 | `0x01` | `LOBBY_STATUS` | every 30 ticks while waiting |
 | `0x02` | `MATCH_INIT` | at match start, sent on 5 consecutive ticks |
-| `0x03` | `KEYFRAME` | every 30 ticks (0.5 s) and at match start |
-| `0x04` | `DELTA` | every other tick |
+| `0x03` | `KEYFRAME` | at match start, then every 30 ticks (0.5 s) |
+| `0x04` | `DELTA` | every tick that is not a keyframe |
 | `0x05` | `MATCH_END` | when the match ends |
 
 ### 5.1 Entity ids — which number means what

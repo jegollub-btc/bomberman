@@ -61,24 +61,40 @@ The one you need for the controls is `lobby`:
   "state": "open",
   "paused": false,
   "can_start": true,
+  "min_players": 2,
   "max_players": 4,
   "countdown_ticks": 0,
+  "tick_rate": 60,
+  "map": { "width": 15, "height": 13, "density": 0.75, "symmetry": "quad", "seed": "0" },
   "slots": [
-    { "id": 0, "name": "bot-0", "addr": "10.12.3.44:51234", "connected": true,
-      "rtt_ms": 3, "packets_per_sec": 60, "loss_pct": 0.4, "last_seen_tick": 1233 },
-    { "id": 1, "name": null, "addr": null, "connected": false,
-      "rtt_ms": null, "packets_per_sec": 0, "loss_pct": 0, "last_seen_tick": null }
+    { "id": 0, "name": "bot-0", "connected": true, "addr": "10.12.3.44:51234",
+      "packets_per_sec": 60, "loss_pct": 0.4, "last_seen_tick": 1233,
+      "stale_ms": 16, "stale": false },
+    { "id": 1, "name": "bot-1", "connected": false, "addr": null,
+      "packets_per_sec": 0, "loss_pct": 0, "last_seen_tick": null,
+      "stale_ms": null, "stale": false }
   ]
 }
 ```
 
-Sent on connect and again whenever anything changes.
+Sent on connect, whenever anything changes, **and twice a second regardless**.
+That last part matters: `packets_per_sec` and `stale_ms` are measurements, not
+events, so a readout that only updated on change would freeze exactly when a
+bot goes quiet.
 
 `state` is `open` · `locked` · `countdown` · `running` · `match_over`.
+
+`stale_ms` is **time since that seat last sent anything**, not round-trip time.
+RTT needs an echo and a two-byte uplink has no room for a token to echo back;
+staleness is measurable and is what actually answers "is it safe to start".
+`stale` is the server applying its own threshold to it.
 
 **Drive the buttons from `state` and `can_start`, not from your own bookkeeping.**
 `can_start` is the server's own answer to "would `start` succeed right now", so
 the UI and the server can never disagree about whether the button should work.
+In particular it is `false` in `match_over`: a finished match must be `reset`
+before another can begin, so a stray click cannot throw away results somebody is
+still reading.
 
 | `state` | `start` | `pause` | `resume` | `end` | `reset` | `kick` |
 |---------|:-------:|:-------:|:--------:|:-----:|:-------:|:------:|
@@ -117,7 +133,9 @@ kickButton.onclick   = () => send("kick", { id: 2 });
   "looks full, go" is exactly how a tournament round begins without one of the
   competitors.
 - An empty seat is still listed with `"connected": false`, so the UI can draw a
-  fixed set of places instead of a list that shifts as bots connect.
+  fixed set of places instead of a list that shifts as bots connect. It keeps a
+  `name` (back to the `bot-<id>` default); only `addr` goes `null`.
+- An unparseable command still gets an `error` reply, with an empty `cmd`.
 - A bot that has stopped sending keeps its seat but goes stale — watch
   `last_seen_tick` and `packets_per_sec`, and make that obvious before someone
   presses Start.
