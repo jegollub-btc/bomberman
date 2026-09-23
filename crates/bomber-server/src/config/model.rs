@@ -27,7 +27,7 @@ pub struct ServerSection {
     pub keyframe_interval_ticks: u32,
     /// Consecutive ticks `MATCH_INIT` is repeated on.
     pub match_init_repeats: u32,
-    /// Directory holding the visualizer, served at `/`.
+    /// Directory holding the built visualizer, served at `/`.
     pub static_dir: String,
 }
 
@@ -38,7 +38,7 @@ impl Default for ServerSection {
             web_bind: format!("127.0.0.1:{}", bomber_protocol::DEFAULT_WEB_PORT),
             keyframe_interval_ticks: 30,
             match_init_repeats: 5,
-            static_dir: "visualizer".into(),
+            static_dir: "visualizer/dist".into(),
         }
     }
 }
