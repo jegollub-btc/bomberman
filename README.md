@@ -56,7 +56,7 @@ either, so a player id is only believed when it arrives from the address that
 claimed the seat.
 
 ```sh
-just test           # 92 tests
+just test           # 91 tests
 just lint           # clippy, warnings denied
 ```
 
