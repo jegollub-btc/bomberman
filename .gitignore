@@ -1,0 +1,12 @@
+/target
+/result
+/result-*
+.direnv/
+node_modules/
+visualizer/dist/
+__pycache__/
+*.pyc
+/recordings/
+
+# Asset drops live outside version control until the visualizer consumes them.
+/bomberman-assets.zip
