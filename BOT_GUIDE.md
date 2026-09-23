@@ -103,7 +103,7 @@ That is the entire uplink. It is two bytes per tick, forever.
 
 | Code | Action | Meaning |
 |-----:|--------|---------|
-| `0` | `NOOP` | do nothing this tick |
+| `0` | `IDLE` | liveness heartbeat -- see below. Identical in effect to sending nothing. |
 | `1` | `UP` | step up (y − 1) |
 | `2` | `DOWN` | step down (y + 1) |
 | `3` | `LEFT` | step left (x − 1) |
@@ -135,12 +135,19 @@ have most of its packets discarded as duplicates.**
 
 ### Pacing
 
-- Send **exactly one packet per tick** (≈ every 16.6 ms).
-- Send `NOOP` rather than sending nothing, so the server can see you are alive.
-- Do not burst. Only the **newest packet received inside a tick's window** is
-  used; the rest are thrown away.
-- If you send nothing at all, your player simply does nothing that tick. The
-  server never waits for you.
+**Send a packet only on ticks where you actually want to do something.**
+Silence means "carry on", costs nothing, and is the normal state for a bot that
+is mid-step or waiting for a fuse.
+
+- At most **one packet per tick** (≈ every 16.6 ms). Only the **newest packet
+  received inside a tick's window** is used; the rest are discarded, so bursting
+  wastes bandwidth and nothing else.
+- The server never waits for you. Send nothing and your player does nothing that
+  tick.
+- `IDLE` exists **only** so the moderation UI can tell a thinking bot from a
+  crashed one. Send it a couple of times a second while you are idle -- never
+  every tick. A bot transmitting 60 "I am doing nothing" packets per second is
+  pure noise, and the server treats it identically to silence anyway.
 
 ---
 
@@ -162,7 +169,44 @@ Every server → client frame starts with the same 5-byte header:
 | `0x04` | `DELTA` | every other tick |
 | `0x05` | `MATCH_END` | when the match ends |
 
-### 5.1 `ASSIGNED` (0x00) — 9 bytes
+### 5.1 Entity ids — which number means what
+
+Four different things on the wire are small integers, and mixing them up is the
+easiest mistake to make. They live in **separate namespaces**: bomb `3` and
+power-up `3` have nothing to do with each other.
+
+| Namespace | Type | Range | Assigned by | Lives from → to | Reused? |
+|-----------|------|-------|-------------|-----------------|---------|
+| **player id** | `u8` | `0`–`3` | server, on your hello | you join → you are kicked | Yes. A freed seat is handed to the next bot that says hello. Stable for the whole session, across matches. |
+| **bomb id** | `u16` | `1`–`65535` | server, on placement | `BOMB_ADD` → `BOMB_REMOVE` | Wraps after 65535, never `0`. Unique among *live* bombs, which is all you need. |
+| **power-up id** | `u16` | `1`–`65535` | server, on drop | `POWERUP_ADD` → `POWERUP_REMOVE` | Same as bombs. |
+| **tick** | `u32` | from `0` | server | resets to `0` at each `MATCH_INIT` | Per match, monotonic. |
+| **match id** | `u32` | any | server | one match | For logs; you never need it. |
+
+Two things that deliberately have **no id**:
+
+- **Flame cells** — addressed by `(x, y)`. A cell is either burning or it is not;
+  there is nothing to track across ticks.
+- **Tiles** — addressed by `(x, y)`.
+
+**`0xFF` is the "no player" sentinel.** It appears in `PLAYER_DEATH.killer`
+(nobody gets credit), `POWERUP_REMOVE.taken_by` (fire destroyed it, nobody
+picked it up), and `MATCH_END.winner` (a draw). It is never a real player id.
+
+Keep three maps and you have the whole world:
+
+```python
+players  = {}   # player id  -> position, stats, alive
+bombs    = {}   # bomb id    -> cell, fuse, owner
+powerups = {}   # powerup id -> cell, kind
+flames   = {}   # (x, y)     -> ticks remaining
+grid     = []   # [y * width + x] -> tile
+```
+
+Every record in §5.6 tells you to insert into, update, or delete from exactly
+one of these.
+
+### 5.2 `ASSIGNED` (0x00) — 9 bytes
 
 | Offset | Type | Field |
 |-------:|------|-------|
@@ -171,7 +215,7 @@ Every server → client frame starts with the same 5-byte header:
 | 7 | `u8` | tick rate (`60`) |
 | 8 | `u8` | max players |
 
-### 5.2 `LOBBY_STATUS` (0x01) — 11 bytes
+### 5.3 `LOBBY_STATUS` (0x01) — 11 bytes
 
 | Offset | Type | Field |
 |-------:|------|-------|
@@ -183,7 +227,7 @@ Every server → client frame starts with the same 5-byte header:
 
 Lobby states: `0` open · `1` locked · `2` countdown · `3` running · `4` match over.
 
-### 5.3 `MATCH_INIT` (0x02) — the initial data
+### 5.4 `MATCH_INIT` (0x02) — the initial data
 
 Everything static about the match. Read it once and keep it.
 
@@ -196,11 +240,11 @@ Everything static about the match. Read it once and keep it.
 | 19 | `u8` | player count *N* |
 | 20 | `u8` | board width *W* |
 | 21 | `u8` | board height *H* |
-| 22 | `u8[ceil(W*H/4)]` | packed tile grid (§5.6) |
+| 22 | `u8[ceil(W*H/4)]` | packed tile grid (§5.7) |
 | … | `(u8,u8) × N` | spawn cell per player, indexed by player id |
-| … | rules block | §5.7 |
+| … | rules block | §5.8 |
 
-### 5.4 `KEYFRAME` (0x03) — complete state
+### 5.5 `KEYFRAME` (0x03) — complete state
 
 | Offset | Type | Field |
 |-------:|------|-------|
@@ -235,7 +279,7 @@ Everything static about the match. Read it once and keep it.
 **Power-up record (5 bytes):** `u16` id, `u8` x, `u8` y, `u8` kind
 (`0` extra bomb, `1` bigger flame, `2` speed).
 
-### 5.5 `DELTA` (0x04) — changes since a named tick
+### 5.6 `DELTA` (0x04) — changes since a named tick
 
 | Offset | Type | Field |
 |-------:|------|-------|
@@ -244,25 +288,26 @@ Everything static about the match. Read it once and keep it.
 
 Each record is a `u8` tag followed by a fixed payload:
 
-| Tag | Record | Payload |
-|----:|--------|---------|
-| `0x01` | `PLAYER_STATE` | `u8` id, `u8` flags, `u8` x, `u8` y, `u8` dir, `u8` progress |
-| `0x02` | `PLAYER_STATS` | `u8` id, `u8` bombs_max, `u8` flame, `u8` speed, `u16` score |
-| `0x03` | `BOMB_ADD` | `u16` id, `u8` owner, `u8` x, `u8` y, `u16` fuse |
-| `0x04` | `BOMB_REMOVE` | `u16` id |
-| `0x05` | `EXPLOSION` | `u8` x, `u8` y, `u8` up, `u8` down, `u8` left, `u8` right |
-| `0x06` | `TILE_SET` | `u8` x, `u8` y, `u8` tile |
-| `0x07` | `POWERUP_ADD` | `u16` id, `u8` x, `u8` y, `u8` kind |
-| `0x08` | `POWERUP_REMOVE` | `u16` id, `u8` taken_by (`0xFF` = destroyed) |
-| `0x09` | `PLAYER_DEATH` | `u8` id, `u8` killer (`0xFF` = no credit) |
-| `0x0A` | `FLAME_ADD` | `u8` x, `u8` y, `u8` ticks |
-| `0x0B` | `FLAME_REMOVE` | `u8` x, `u8` y |
-| `0x0C` | `TIMER` | `u32` ticks remaining |
+| Tag | Record | Payload | What it means |
+|----:|--------|---------|---------------|
+| `0x01` | `PLAYER_STATE` | `u8` **player id**, `u8` flags, `u8` x, `u8` y, `u8` dir, `u8` progress | A player moved, turned, or died. Sent every tick for every player whose state changed. |
+| `0x02` | `PLAYER_STATS` | `u8` **player id**, `u8` bombs_max, `u8` flame, `u8` speed, `u16` score | Inventory or score changed. |
+| `0x03` | `BOMB_ADD` | `u16` **bomb id**, `u8` **player id** (owner), `u8` x, `u8` y, `u16` fuse | A bomb was placed. Remember the id. |
+| `0x04` | `BOMB_REMOVE` | `u16` **bomb id** | That bomb is gone. Always paired with an `EXPLOSION` at the same cell. |
+| `0x05` | `EXPLOSION` | `u8` x, `u8` y, `u8` up, `u8` down, `u8` left, `u8` right | The blast *shape* — arm lengths from the centre. For animation. The cells that kill arrive as `FLAME_ADD`. |
+| `0x06` | `TILE_SET` | `u8` x, `u8` y, `u8` tile | A cell changed: a crate was destroyed (`→ empty`) or sudden death walled it off (`→ solid`). |
+| `0x07` | `POWERUP_ADD` | `u16` **power-up id**, `u8` x, `u8` y, `u8` kind | An item dropped from a destroyed crate. |
+| `0x08` | `POWERUP_REMOVE` | `u16` **power-up id**, `u8` **player id** or `0xFF` | Item left the board. A player id means collected; `0xFF` means fire destroyed it. |
+| `0x09` | `PLAYER_DEATH` | `u8` **player id**, `u8` killer (always `0xFF`) | That player is out for the rest of the match. |
+| `0x0A` | `FLAME_ADD` | `u8` x, `u8` y, `u8` ticks | **This cell is now lethal.** The record that matters for staying alive. |
+| `0x0B` | `FLAME_REMOVE` | `u8` x, `u8` y | The fire on that cell went out. |
+| `0x0C` | `TIMER` | `u32` ticks remaining | Round clock. |
+| `0x0D` | `WALL_CLOSED` | `u8` x, `u8` y | Sudden death sealed this cell. A `TILE_SET → solid` for the same cell arrives with it. |
 
 `EXPLOSION` is the blast *shape*, useful for animation. The cells that actually
 kill you arrive as `FLAME_ADD` records — trust those.
 
-### 5.6 The packed tile grid
+### 5.7 The packed tile grid
 
 Two bits per cell, row-major, low bits first.
 
@@ -277,7 +322,7 @@ Tiles: `0` empty (walkable) · `1` solid wall (indestructible) · `2` soft block
 
 A 15×13 board is 49 bytes; a 31×31 board is 241.
 
-### 5.7 The rules block (17 bytes)
+### 5.8 The rules block (17 bytes)
 
 Read these rather than hardcoding them — the moderator can retune the server
 between matches and your bot will follow along.
@@ -302,7 +347,7 @@ Ticks to cross one cell at speed *s*:
 max(1, ticks_per_cell - ticks_saved_per_level * s)
 ```
 
-### 5.8 `MATCH_END` (0x05)
+### 5.9 `MATCH_END` (0x05)
 
 | Offset | Type | Field |
 |-------:|------|-------|
@@ -506,6 +551,8 @@ pick up the new constants from `MATCH_INIT` with no rebuild.
 | Never receive `ASSIGNED` | Lobby is full or locked, or you are sending to the wrong port. Retry hello every 500 ms. |
 | `ASSIGNED` arrives, then nothing | You are reading with a different socket than you sent hello from. Identity is bound to the source address. |
 | Actions are ignored | Byte 0 is not your assigned id, or you used a reserved action code (`10`–`14`). Both are dropped silently. |
+| Moderation UI shows your bot as stale while it is thinking | You are sending nothing at all. Send `IDLE` (`0`) a couple of times a second so the UI can see you are alive. |
+| You track a bomb that never disappears | You matched a `BOMB_REMOVE` against a power-up or player id. The three id namespaces are separate (§5.1). |
 | Only some actions register | You are not incrementing the sequence nibble, so repeats look like duplicates. |
 | Player drifts from where you think it is | You applied a `DELTA` whose `base_tick` you did not hold. Discard and wait for a `KEYFRAME`. |
 | State freezes for half a second, then jumps | Normal after packet loss — that is the keyframe arriving. If it happens constantly, check for a blocked receive loop. |

@@ -151,33 +151,58 @@ waiting).
 **`move_progress` / `move_total` are what you interpolate with.** See §4.2 —
 and note that a moving player's `x`/`y` are already the *destination*.
 
-### 2.4 `events`
+### 2.4 Entity ids
+
+Three different things are numbered, in **separate namespaces**. Bomb `3` and
+power-up `3` are unrelated.
+
+| Field | Namespace | Range | Lives from → to |
+|-------|-----------|-------|-----------------|
+| `player` / `players[].id` | player id | `0`–`3` | joins the lobby → is kicked. Stable across matches. |
+| `bomb` / `bombs[].id` | bomb id | `1`+ | `bomb_placed` → `explosion` |
+| `powerup` / `powerups[].id` | power-up id | `1`+ | `powerup_spawned` → `powerup_taken` / `powerup_burned` |
+
+Flames and tiles have no id — they are addressed by `(x, y)`, because a cell is
+either burning or it is not and there is nothing to follow across ticks.
+
+Events always name the namespace in the field itself (`player`, `bomb`,
+`powerup`) rather than a bare `id`, precisely so this cannot be got wrong.
+
+### 2.5 `events`
 
 Discrete things that happened on this tick, carried inside `state`. They exist
 because some things are invisible in a state diff — a bomb that explodes and
-clears in the same tick, for instance — and because animations and sounds need
-a trigger, not a level.
+clears within one tick, for instance — and because animations and sounds need a
+trigger, not a level.
 
 ```json
-{ "type": "bomb_placed",     "id": 9, "owner": 0, "x": 3, "y": 6 }
-{ "type": "explosion",       "x": 3, "y": 6, "up": 1, "down": 2, "left": 0, "right": 3 }
+{ "type": "bomb_placed",     "bomb": 9, "player": 0, "x": 3, "y": 6 }
+{ "type": "explosion",       "bomb": 9, "x": 3, "y": 6,
+                             "up": 1, "down": 2, "left": 0, "right": 3 }
 { "type": "block_destroyed", "x": 4, "y": 6 }
-{ "type": "powerup_spawned", "id": 5, "x": 4, "y": 6, "kind": "extra_bomb" }
-{ "type": "powerup_taken",   "id": 4, "player": 0, "kind": "speed" }
-{ "type": "powerup_burned",  "id": 4, "x": 7, "y": 7 }
-{ "type": "death",           "id": 3 }
+{ "type": "powerup_spawned", "powerup": 5, "x": 4, "y": 6, "kind": "extra_bomb" }
+{ "type": "powerup_taken",   "powerup": 4, "player": 0, "kind": "speed" }
+{ "type": "powerup_burned",  "powerup": 4, "x": 7, "y": 7 }
+{ "type": "death",           "player": 3 }
 { "type": "wall_closed",     "x": 1, "y": 1 }
 ```
 
-`explosion` gives you the **blast shape** — arm lengths in each direction from
-the centre — which is exactly what you need to compose the flame sprites in
-§4.4. The `flames` array tells you which cells are *currently* lethal; the
-event tells you a blast *just happened* there. Use the event to start an
-animation, the array to know what to keep drawing.
+| Event | Draw / play |
+|-------|-------------|
+| `bomb_placed` | Start the `bomb_tick` loop on that cell. |
+| `explosion` | Compose the flame sprites from the arm lengths (§4.4) and start the 5-frame animation. **This is the one that drives the explosion art.** |
+| `block_destroyed` | Play `crate_break_0…3` on that cell, once. |
+| `powerup_spawned` | Item appears; start its `hover` loop. |
+| `powerup_taken` | Pickup chime, brief flash on the collecting player. |
+| `powerup_burned` | Item destroyed by fire — a different, sadder effect than being taken. |
+| `death` | Death animation and sound for that player. |
+| `wall_closed` | Sudden death sealed a cell; worth a thud and a shake. |
 
-`wall_closed` is sudden death walling off a cell.
+`explosion` gives you the blast **shape** — arm lengths in each direction from
+the centre. The `flames` array tells you which cells are *currently* lethal. Use
+the event to start an animation, the array to know what to keep drawing.
 
-### 2.5 `match_end`
+### 2.6 `match_end`
 
 ```json
 {
@@ -198,7 +223,7 @@ draw. Tied players share a `placement`.
 The server stays on `match_over` until the moderator resets, so the results
 screen can sit there as long as needed.
 
-### 2.6 `ack` / `error` (admin only)
+### 2.7 `ack` / `error` (admin only)
 
 Every command gets exactly one reply:
 
@@ -207,7 +232,7 @@ Every command gets exactly one reply:
 { "type": "error", "cmd": "start", "message": "need at least 2 players" }
 ```
 
-### 2.7 `map_preview` (admin only)
+### 2.8 `map_preview` (admin only)
 
 Reply to `preview_map`. Same shape as the board part of `match_init`, so you
 can render it with the same code:
@@ -221,13 +246,15 @@ can render it with the same code:
 
 ## 3. Commands (admin socket)
 
-Send JSON objects with a `cmd` field.
+Send JSON objects with a `cmd` field. `MODERATION_API.md` covers this channel on
+its own if you only need the controls.
 
 | Command | Payload | Effect |
 |---------|---------|--------|
 | `start` | — | Begin the countdown. Fails unless at least 2 slots are filled. |
 | `pause` / `resume` | — | Freeze/unfreeze the tick loop. Bots keep their sockets; the clock stops. |
-| `reset` | — | Abort any running match and return to the lobby. Emits `match_end` with reason `aborted`. |
+| `end` | — | End the running match now. Emits `match_end` with reason `aborted`, and leaves the results up. |
+| `reset` | — | Clear the results and return to the lobby. |
 | `lock` / `unlock` | — | Stop/allow new bots joining. |
 | `kick` | `{"id": 2}` | Free that slot. The bot must send hello again to rejoin. |
 | `rename` | `{"id": 2, "name": "team-rocket"}` | Set the display name for a slot. |
