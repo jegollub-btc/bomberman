@@ -15,7 +15,7 @@ pub fn run(game: &mut GameState, intents: &[Option<Intent>], events: &mut Vec<Ev
     // contested cell.
     for index in 0..game.players.len() {
         let intent = intents
-            .get(index)
+            .get(game.players[index].id.index())
             .copied()
             .flatten()
             .unwrap_or(Intent::IDLE);

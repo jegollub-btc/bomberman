@@ -8,7 +8,7 @@ mod common;
 
 use bomber_domain::board::{generate, GenerationConfig};
 use bomber_domain::game::{GameState, Intent, Rules};
-use bomber_domain::shared::Direction;
+use bomber_domain::shared::{Direction, PlayerId};
 
 /// Inputs derived arithmetically from the tick, so the sequence is identical
 /// across runs without needing a recorded log on disk.
@@ -28,7 +28,8 @@ fn scripted(tick: u32, player: u8) -> Option<Intent> {
 
 fn fresh(seed: u64) -> GameState {
     let config = GenerationConfig::default();
-    GameState::new(generate(&config, seed, 4), Rules::default(), seed, 4)
+    let seats: Vec<PlayerId> = (0..4).map(PlayerId::new).collect();
+    GameState::new(generate(&config, seed, 4), Rules::default(), seed, &seats)
 }
 
 fn run(seed: u64, ticks: u32) -> u64 {

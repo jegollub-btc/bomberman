@@ -43,12 +43,16 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(board: Board, rules: Rules, seed: u64, player_count: u8) -> Self {
-        let players = (0..player_count)
-            .map(|raw| {
-                let id = PlayerId::new(raw);
-                Player::spawn(id, board.spawns[id.index()], &rules)
-            })
+    /// `participants` are the seats actually taking part, in spawn order.
+    ///
+    /// Seats need not be contiguous: kicking the middle bot of three must not
+    /// renumber the survivors, because the id they put in byte 0 of every
+    /// packet is the id they were assigned at the door.
+    pub fn new(board: Board, rules: Rules, seed: u64, participants: &[PlayerId]) -> Self {
+        let players = participants
+            .iter()
+            .enumerate()
+            .map(|(spawn_index, &id)| Player::spawn(id, board.spawns[spawn_index], &rules))
             .collect();
         let flames = FlameField::for_grid(&board.grid);
         let closing_order = phases::sudden_death::closing_order(board.width(), board.height());
@@ -75,7 +79,8 @@ impl GameState {
 
     /// Advance exactly one tick.
     ///
-    /// `intents` is indexed by player id. `None` means the bot sent nothing,
+    /// `intents` is indexed by **player id**, not by position in `players` --
+    /// seats can be sparse. `None` means the bot sent nothing,
     /// which is treated the same as an explicit idle -- a bot is never required
     /// to transmit on a tick where it has nothing to say.
     pub fn step(&mut self, intents: &[Option<Intent>]) -> TickOutcome {

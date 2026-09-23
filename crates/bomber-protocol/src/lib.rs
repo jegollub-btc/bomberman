@@ -20,7 +20,8 @@ pub mod uplink;
 
 pub use codec::{ProtoError, Reader, Result, Writer};
 pub use downlink::{
-    frame_type, record_type, Assigned, BombSnapshot, Delta, DeltaRecord, FlameCell, Keyframe,
+    frame_type, record_type, records_from_events, Assigned, BombSnapshot, Delta, DeltaRecord,
+    FlameCell, Keyframe,
     LobbyStatus, MatchEnd, MatchInit, PlayerResultRecord, PlayerSnapshot, PowerupSnapshot,
     ServerFrame, RULES_ENCODED_LEN,
 };

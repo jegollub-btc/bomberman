@@ -19,7 +19,12 @@ pub fn arena_with(players: u8, rules: Rules) -> GameState {
         soft_block_density: 0.0,
         symmetry: Symmetry::Quad,
     };
-    GameState::new(generate(&config, 1, players), rules, 1, players)
+    GameState::new(generate(&config, 1, players), rules, 1, &seats(players))
+}
+
+/// Contiguous seats 0..players, the ordinary case.
+pub fn seats(players: u8) -> Vec<PlayerId> {
+    (0..players).map(PlayerId::new).collect()
 }
 
 pub fn idle(players: usize) -> Vec<Option<Intent>> {

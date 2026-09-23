@@ -1,0 +1,13 @@
+[package]
+name = "bomber-application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Arena session use cases: admission, the tick, delivery policy and moderation"
+
+[dependencies]
+bomber-domain = { workspace = true }
+bomber-protocol = { workspace = true }
+rand = { workspace = true }
+rand_pcg = { workspace = true }
+serde = { workspace = true }

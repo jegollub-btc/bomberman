@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/bomber-application",
     "crates/bomber-domain",
     "crates/bomber-protocol",
     "crates/bomber-server",
@@ -13,6 +14,7 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
+bomber-application = { path = "crates/bomber-application" }
 bomber-domain = { path = "crates/bomber-domain" }
 bomber-protocol = { path = "crates/bomber-protocol" }
 

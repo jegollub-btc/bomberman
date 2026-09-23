@@ -10,7 +10,7 @@ use crate::game::{Bomb, Event, GameState, Intent};
 pub fn run(game: &mut GameState, intents: &[Option<Intent>], events: &mut Vec<Event>) {
     for index in 0..game.players.len() {
         let wants_bomb = intents
-            .get(index)
+            .get(game.players[index].id.index())
             .copied()
             .flatten()
             .unwrap_or(Intent::IDLE)
