@@ -2,8 +2,8 @@
 
 mod common;
 
-use bomber_domain::game::{Powerup, PowerupKind, Rules};
-use bomber_domain::shared::{Cell, Direction};
+use bomber_domain::game::{Event, Powerup, PowerupKind, Rules};
+use bomber_domain::shared::{Cell, Direction, PlayerId};
 use common::*;
 
 #[test]
@@ -60,4 +60,30 @@ fn a_power_up_caught_in_a_blast_is_destroyed_not_banked() {
 
     assert!(state.powerups.is_empty());
     assert_eq!(state.players[0].flame, 2, "not collected on the way out");
+}
+
+/// Collecting one has to be announced, not just applied: the visualizer plays a
+/// pickup effect off this event, and a bot credits the item from it.
+#[test]
+fn collecting_a_power_up_reports_who_took_it() {
+    let mut state = arena(1);
+    let me = PlayerId::new(0);
+    let target = Cell::new(2, 1);
+    state.powerups.push(Powerup {
+        id: 7,
+        cell: target,
+        kind: PowerupKind::ExtraBomb,
+    });
+
+    let outcome = state.step(&only(1, 0, walk(Direction::Right)));
+
+    assert!(
+        outcome.events.iter().any(|event| matches!(
+            event,
+            Event::PowerupRemoved { id: 7, taken_by: Some(p), .. } if *p == me
+        )),
+        "expected a PowerupRemoved crediting {me}, got {:?}",
+        outcome.events
+    );
+    assert_eq!(state.players[0].bombs_max, 2);
 }

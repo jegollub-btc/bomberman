@@ -298,6 +298,17 @@ def decide(world):
         anywhere = [d for d, (dx, dy) in STEP.items() if world.walkable(x + dx, y + dy)]
         return random.choice(anywhere) if anywhere else None
 
+    # A power-up within easy reach beats breaking another crate: it is about to
+    # be destroyed by somebody's next blast, and the crate will still be there.
+    # This is checked before bombing, because our own blast is usually what ends
+    # up blocking the route to it.
+    wanted = {(u["x"], u["y"]) for u in world.powerups.values()}
+    if wanted:
+        step, dist = bfs(world, (x, y), lambda cx, cy: (cx, cy) in wanted,
+                         blocked=doomed)
+        if step is not None and dist <= 6:
+            return step
+
     # Next to a crate, with a bomb spare and a way out: light it up and leave.
     beside_crate = any(world.tile(x + dx, y + dy) == SOFT for dx, dy in STEP.values())
     mine = sum(1 for b in world.bombs.values() if b["owner"] == world.me)

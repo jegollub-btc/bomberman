@@ -1,9 +1,9 @@
-# Bomberman bot arena task runner.
+# Bomberman arena task runner.
 
 default:
     @just --list
 
-# Run the server (serves the visualizer build on http://127.0.0.1:8080).
+# Run the server: bots on udp/47800, web UI on http://127.0.0.1:8080.
 server *ARGS:
     cargo run -p bomber-server -- {{ARGS}}
 
@@ -11,24 +11,23 @@ server *ARGS:
 watch:
     watchexec -r -e rs -- cargo run -p bomber-server
 
-# Visualizer dev server with hot reload (proxies /ws to the game server).
-viz:
-    cd visualizer && pnpm install && pnpm dev
-
-# Run the example Rust bot.
-bot *ARGS:
-    cargo run -p bomber-bot --bin wanderer -- {{ARGS}}
-
-# Run the example Python bot.
+# Run one example Python bot. Run it twice to fill a lobby.
 pybot *ARGS:
     python3 clients/python/examples/wanderer.py {{ARGS}}
 
-# Server + visualizer together.
-dev:
+# Server plus two bots, ready for you to press Start in the UI.
+arena:
     #!/usr/bin/env bash
+    set -euo pipefail
     trap 'kill 0' EXIT
-    cargo run -p bomber-server &
-    (cd visualizer && pnpm install && pnpm dev) &
+    cargo build -p bomber-server
+    ./target/debug/bomber-server &
+    sleep 1
+    python3 clients/python/examples/wanderer.py &
+    python3 clients/python/examples/wanderer.py &
+    echo
+    echo "  open http://127.0.0.1:8080  --  ctrl-c to stop everything"
+    echo
     wait
 
 test:
@@ -39,3 +38,7 @@ lint:
 
 fmt:
     nix fmt
+
+# Recipes for the Rust bot SDK (crates/bomber-bot) and the visualizer
+# (visualizer/) are deliberately absent: neither exists yet, and a recipe that
+# fails is worse than one that is missing.
