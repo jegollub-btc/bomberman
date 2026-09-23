@@ -2,6 +2,7 @@
 
 mod common;
 
+use bomber_domain::board::Tile;
 use bomber_domain::game::{Event, Powerup, PowerupKind, Rules};
 use bomber_domain::shared::{Cell, Direction, PlayerId};
 use common::*;
@@ -86,4 +87,75 @@ fn collecting_a_power_up_reports_who_took_it() {
         outcome.events
     );
     assert_eq!(state.players[0].bombs_max, 2);
+}
+
+/// The bug this pins: dropping the power-up before sweeping the cell destroyed
+/// every power-up in the game on the tick it appeared. Nothing errored -- the
+/// drop and the destruction both looked entirely normal -- and matches simply
+/// had no items in them.
+#[test]
+fn a_power_up_survives_the_blast_that_dropped_it() {
+    let mut state = arena_with(
+        1,
+        Rules {
+            bomb_fuse_ticks: 1,
+            powerup_chance_pct: 100,
+            ..Rules::default()
+        },
+    );
+    let crate_cell = Cell::new(2, 1);
+    state.board.grid.set(crate_cell, Tile::Soft);
+
+    state.step(&only(1, 0, bomb()));
+    let outcome = state.step(&idle(1));
+
+    assert_eq!(
+        state.powerups.len(),
+        1,
+        "the crate broke, so its item is on the board: {:?}",
+        outcome.events
+    );
+    assert_eq!(state.powerups[0].cell, crate_cell);
+    assert!(
+        outcome
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::PowerupSpawned { cell, .. } if *cell == crate_cell)),
+        "and its arrival was announced"
+    );
+    assert!(
+        !outcome.events.iter().any(|e| matches!(
+            e,
+            Event::PowerupRemoved { taken_by: None, cell, .. } if *cell == crate_cell
+        )),
+        "it must not be swept away by the blast that produced it"
+    );
+}
+
+/// The other half of the rule, so a fix to one cannot quietly break the other.
+#[test]
+fn a_power_up_already_lying_there_is_destroyed_by_a_blast() {
+    let mut state = arena_with(
+        1,
+        Rules {
+            bomb_fuse_ticks: 1,
+            start_flame: 2,
+            powerup_chance_pct: 0,
+            ..Rules::default()
+        },
+    );
+    state.powerups.push(Powerup {
+        id: 42,
+        cell: Cell::new(3, 1),
+        kind: PowerupKind::Flame,
+    });
+
+    state.step(&only(1, 0, bomb()));
+    let outcome = state.step(&idle(1));
+
+    assert!(state.powerups.is_empty());
+    assert!(outcome.events.iter().any(|e| matches!(
+        e,
+        Event::PowerupRemoved { id: 42, taken_by: None, .. }
+    )));
 }

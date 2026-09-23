@@ -77,18 +77,11 @@ fn ignite(
     events: &mut Vec<Event>,
     pending: &mut VecDeque<BombId>,
 ) {
-    if game.board.grid.get(cell) == Tile::Soft {
-        game.board.grid.set(cell, Tile::Empty);
-        events.push(Event::TileChanged {
-            cell,
-            tile: Tile::Empty,
-        });
-        game.award(owner, scoring::SCORE_BLOCK, events);
-        maybe_drop_powerup(game, cell, events);
-    }
-
-    // Fire destroys a power-up rather than banking it, so blasting open a
-    // corridor can cost you the item you were aiming for.
+    // Order matters, and getting it wrong is silent: a power-up already lying
+    // here is destroyed by the blast, but one this same blast is about to drop
+    // must survive it. Dropping first and sweeping afterwards destroys every
+    // power-up in the game on the tick it appears, and nothing ever reports an
+    // error -- the drop and the destruction both look entirely normal.
     if let Some(index) = game.powerups.iter().position(|p| p.cell == cell) {
         let removed = game.powerups.remove(index);
         events.push(Event::PowerupRemoved {
@@ -97,6 +90,16 @@ fn ignite(
             kind: removed.kind,
             taken_by: None,
         });
+    }
+
+    if game.board.grid.get(cell) == Tile::Soft {
+        game.board.grid.set(cell, Tile::Empty);
+        events.push(Event::TileChanged {
+            cell,
+            tile: Tile::Empty,
+        });
+        game.award(owner, scoring::SCORE_BLOCK, events);
+        maybe_drop_powerup(game, cell, events);
     }
 
     let ticks = game.rules.flame_duration_ticks.min(u8::MAX as u16) as u8;
